@@ -1,0 +1,2 @@
+# saruca
+Mining Gemini CLI 
