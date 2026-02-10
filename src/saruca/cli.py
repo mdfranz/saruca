@@ -43,13 +43,9 @@ def summarize_cmd(path, project):
 
     async def run_summaries():
         for s in sessions:
-            click.echo(
-                click.style(
-                    f"\nSummarizing Session: {s.sessionId}", bold=True, fg="cyan"
-                )
-            )
+            click.echo(f"\nSummarizing Session: {s.sessionId}")
             summary = await summarize_session(s)
-            click.echo(click.style(f"Title: {summary.title}", bold=True))
+            click.echo(f"Title: {summary.title}")
             click.echo("Key Points:")
             for pt in summary.key_points:
                 click.echo(f"  - {pt}")
@@ -66,20 +62,20 @@ def summarize_cmd(path, project):
 @click.option(
     "--all", "all_projects", is_flag=True, help="List all projects, not just top 5"
 )
-def list_sessions(path, verbose, project, all_projects):
+@click.option("--thought", "show_thoughts", is_flag=True, help="Show model thoughts")
+def list_sessions(path, verbose, project, all_projects, show_thoughts):
     """List sessions and show a detailed summary."""
-    _list_sessions_impl(path, verbose, project, all_projects)
+    _list_sessions_impl(path, verbose, project, all_projects, show_thoughts)
 
 
-def _list_sessions_impl(path, verbose, project, all_projects=False):
+def _list_sessions_impl(
+    path, verbose, project, all_projects=False, show_thoughts=False
+):
     """Internal implementation for listing and summarizing sessions."""
     log_files, session_files = discover_files(path)
 
     click.echo(
-        click.style(
-            f"\nFound {len(log_files)} log files and {len(session_files)} session files.",
-            fg="green",
-        )
+        f"\nFound {len(log_files)} log files and {len(session_files)} session files."
     )
 
     if not session_files:
@@ -113,23 +109,29 @@ def _list_sessions_impl(path, verbose, project, all_projects=False):
         click.echo(f"\nActivity Range: {min_time} to {max_time} ({duration})")
 
     # --- Token Usage ---
-    click.echo(click.style("\n--- Token Usage ---", bold=True))
+    click.echo("\n--- Token Usage ---")
     token_cols = [c for c in messages_df.columns if c.startswith("tokens_")]
     if token_cols:
         token_stats = messages_df.select([pl.col(c).sum() for c in token_cols])
         for col in token_cols:
             val = token_stats[col][0]
-            if val is not None:
+            if val is not None and val > 0:
                 click.echo(f"  {col.replace('tokens_', '').capitalize()}: {val:,}")
     else:
         click.echo("  No token usage data found.")
 
     # --- Model Breakdown ---
     if "model" in messages_df.columns:
-        click.echo(click.style("\n--- Models Used ---", bold=True))
-        model_counts = messages_df.group_by("model").len().sort("len", descending=True)
+        click.echo("\n--- Models Used ---")
+        # Filter out rows where model is null (e.g. user messages, info, error)
+        model_counts = (
+            messages_df.filter(pl.col("model").is_not_null())
+            .group_by("model")
+            .len()
+            .sort("len", descending=True)
+        )
         for row in model_counts.iter_rows():
-            model_name = row[0] if row[0] else "Unknown"
+            model_name = row[0]
             count = row[1]
             click.echo(f"  {model_name}: {count:,} messages")
 
@@ -137,12 +139,12 @@ def _list_sessions_impl(path, verbose, project, all_projects=False):
     tool_calls_df = extract_tool_calls(sessions)
     if not tool_calls_df.is_empty():
         if all_projects:
-            click.echo(click.style("\n--- All Tools ---", bold=True))
+            click.echo("\n--- All Tools ---")
             top_tools = (
                 tool_calls_df["name"].value_counts().sort("count", descending=True)
             )
         else:
-            click.echo(click.style("\n--- Top Tools ---", bold=True))
+            click.echo("\n--- Top Tools ---")
             top_tools = (
                 tool_calls_df["name"]
                 .value_counts()
@@ -155,9 +157,9 @@ def _list_sessions_impl(path, verbose, project, all_projects=False):
 
     # --- Top Projects ---
     if all_projects:
-        click.echo(click.style("\n--- All Projects ---", bold=True))
+        click.echo("\n--- All Projects ---")
     else:
-        click.echo(click.style("\n--- Top Projects ---", bold=True))
+        click.echo("\n--- Top Projects ---")
 
     # Calculate counts
     project_counts = (
@@ -193,69 +195,60 @@ def _list_sessions_impl(path, verbose, project, all_projects=False):
 
         click.echo(f"  {p_hash[:12]}... : {count:4d} msgs | {clean_desc}")
 
-    if verbose:
-        click.echo(click.style("\n--- Full Conversation History ---", bold=True))
+    if verbose or show_thoughts:
+        click.echo("\n--- Full Conversation History ---")
         for s in sessions:
-            click.echo(click.style(f"\nSession: {s.sessionId}", fg="cyan", bold=True))
-            click.echo(click.style(f"Project: {s.projectHash}", fg="cyan"))
-            click.echo(click.style(f"Start Time: {s.startTime}", fg="cyan", dim=True))
-            click.echo(click.style("-" * 60, fg="cyan"))
+            click.echo(f"\nSession: {s.sessionId}")
+            click.echo(f"Project: {s.projectHash}")
+            click.echo(f"Start Time: {s.startTime}")
+            click.echo("-" * 60)
 
             # Sort messages by timestamp
             sorted_messages = sorted(s.messages, key=lambda m: m.timestamp)
 
             for m in sorted_messages:
-                color = "blue" if m.type == "user" else "magenta"
                 role = "USER" if m.type == "user" else "MODEL"
 
-                click.echo(
-                    click.style(
-                        f"[{m.timestamp.strftime('%Y-%m-%d %H:%M:%S')}] {role}:",
-                        fg=color,
-                        bold=True,
-                    )
-                )
-
-                if isinstance(m.content, str):
-                    click.echo(m.content)
-                else:
+                if verbose:
                     click.echo(
-                        orjson.dumps(m.content, option=orjson.OPT_INDENT_2).decode()
+                        f"[{m.timestamp.strftime('%Y-%m-%d %H:%M:%S')}] {role}:"
                     )
 
-                if m.thoughts:
-                    for t in m.thoughts:
-                        if t.thought:
-                            click.echo(
-                                click.style(
-                                    f"\nTHOUGHT: {t.thought}", fg="yellow", dim=True
-                                )
-                            )
-
-                if m.toolCalls:
-                    for tc in m.toolCalls:
+                    if isinstance(m.content, str):
+                        click.echo(m.content)
+                    else:
                         click.echo(
-                            click.style(
-                                f"\nTOOL CALL: {tc.name}", fg="green", bold=True
-                            )
+                            orjson.dumps(m.content, option=orjson.OPT_INDENT_2).decode()
                         )
+
+                if show_thoughts and m.thoughts:
+                    for t in m.thoughts:
+                        thought_text = t.thought or t.description
+                        if thought_text:
+                            if t.subject:
+                                thought_text = f"[{t.subject}] {thought_text}"
+
+                            click.echo(f"\nTHOUGHT: {thought_text}")
+
+                if verbose and m.toolCalls:
+                    for tc in m.toolCalls:
+                        click.echo(f"\nTOOL CALL: {tc.name}")
                         if tc.args:
                             args_json = orjson.dumps(
                                 tc.args, option=orjson.OPT_INDENT_2
                             ).decode()
-                            click.echo(click.style(f"Args: {args_json}", fg="green"))
-                        if tc.output:
-                            out_val = tc.output
+                            click.echo(f"Args: {args_json}")
+                        if tc.result:
+                            out_val = tc.result
                             if not isinstance(out_val, str):
                                 out_val = orjson.dumps(
                                     out_val, option=orjson.OPT_INDENT_2
                                 ).decode()
-                            click.echo(
-                                click.style(f"Output: {out_val}", fg="green", dim=True)
-                            )
+                            click.echo(f"Output: {out_val}")
 
-                click.echo("")
-            click.echo(click.style("=" * 60, fg="cyan"))
+                if verbose:
+                    click.echo("")
+            click.echo("=" * 60)
 
 
 @main.command()
@@ -288,7 +281,7 @@ def export_logs(path, output):
 def export_all(path, prefix):
     """Export all metadata tables to parquet (messages, logs, tool_calls, thoughts, outputs)."""
     log_files, session_files = discover_files(path)
-    
+
     # 1. Logs
     logs = load_log_entries(log_files)
     if logs:
@@ -302,7 +295,7 @@ def export_all(path, prefix):
         df_messages = to_polars_messages(sessions)
         df_messages.write_parquet(f"{prefix}messages.parquet")
         click.echo(f"Saved {prefix}messages.parquet ({len(df_messages)} rows)")
-        
+
         df_tool_calls = extract_tool_calls(sessions)
         if not df_tool_calls.is_empty():
             df_tool_calls.write_parquet(f"{prefix}tool_calls.parquet")
