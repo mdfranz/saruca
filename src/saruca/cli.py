@@ -42,19 +42,12 @@ def summarize_cmd(path, project):
 @click.option("--path", default=".", help="Path to search for logs")
 @click.option("--verbose", is_flag=True, help="Include full conversation history")
 @click.option("--project", help="Filter by project hash (prefix matches)")
-def list_sessions(path, verbose, project):
+@click.option("--all", "all_projects", is_flag=True, help="List all projects, not just top 5")
+def list_sessions(path, verbose, project, all_projects):
     """List sessions and show a detailed summary."""
-    _list_sessions_impl(path, verbose, project)
+    _list_sessions_impl(path, verbose, project, all_projects)
 
-@main.command(name="summary")
-@click.option("--path", default=".", help="Path to search for logs")
-@click.option("--verbose", is_flag=True, help="Include full conversation history")
-@click.option("--project", help="Filter by project hash (prefix matches)")
-def summary_cmd(path, verbose, project):
-    """Show a detailed summary of sessions (alias for list)."""
-    _list_sessions_impl(path, verbose, project)
-
-def _list_sessions_impl(path, verbose, project):
+def _list_sessions_impl(path, verbose, project, all_projects=False):
     """Internal implementation for listing and summarizing sessions."""
     log_files, session_files = discover_files(path)
     
@@ -120,10 +113,15 @@ def _list_sessions_impl(path, verbose, project):
             click.echo(f"  {row[0]}: {row[1]:,} calls")
     
     # --- Top Projects ---
-    click.echo(click.style("\n--- Top Projects ---", bold=True))
+    if all_projects:
+        click.echo(click.style("\n--- All Projects ---", bold=True))
+    else:
+        click.echo(click.style("\n--- Top Projects ---", bold=True))
     
     # Calculate counts
-    project_counts = messages_df["projectHash"].value_counts().sort("count", descending=True).head(5)
+    project_counts = messages_df["projectHash"].value_counts().sort("count", descending=True)
+    if not all_projects:
+        project_counts = project_counts.head(5)
     
     # Extract descriptions (first user message)
     descriptions = (
