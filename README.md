@@ -1,5 +1,7 @@
 # saruca
 
+![saruca logo](saruca.png)
+
 Gemini CLI Log & Session Analyzer.
 
 Mining log and session data from Gemini CLI using Polars for high-performance analysis.
