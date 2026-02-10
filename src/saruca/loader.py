@@ -107,5 +107,8 @@ def extract_tool_calls(sessions: List[Session]) -> pl.DataFrame:
         for k, v in list(call.items()):
             if isinstance(v, (dict, list)):
                 call[k] = orjson.dumps(v).decode()
-                
+
+    if not calls:
+        return pl.DataFrame()
+
     return pl.from_dicts(calls)
