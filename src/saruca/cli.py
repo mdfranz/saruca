@@ -308,35 +308,18 @@ def _list_sessions_impl(
             click.echo("=" * 60)
 
 
-@main.command()
-@click.option("--path", default=".", help="Path to search for logs")
-@click.option("--output", default="messages.parquet", help="Output file")
-def export(path, output):
-    """Export messages to a parquet file."""
-    _, session_files = discover_files(path)
-    sessions = load_sessions(session_files)
-    df = to_polars_messages(sessions)
-    df.write_parquet(output)
-    click.echo(f"Exported {len(df)} messages to {output}")
-
-
-@main.command()
-@click.option("--path", default=".", help="Path to search for logs")
-@click.option("--output", default="logs.parquet", help="Output file")
-def export_logs(path, output):
-    """Export log entries to a parquet file."""
-    log_files, _ = discover_files(path)
-    logs = load_log_entries(log_files)
-    df = to_polars_logs(logs)
-    df.write_parquet(output)
-    click.echo(f"Exported {len(df)} log entries to {output}")
-
-
-@main.command(name="export-all")
+@main.command(name="export")
 @click.option("--path", default=".", help="Path to search for logs")
 @click.option("--prefix", default="", help="Prefix for output parquet files")
 def export_all(path, prefix):
     """Export all metadata tables to parquet (messages, logs, tool_calls, thoughts, outputs)."""
+    # Import lazily to avoid hard dependency errors on startup.
+    try:
+        from .extract_data import collect_chat_logs, collect_security_events
+    except ModuleNotFoundError:
+        collect_chat_logs = None
+        collect_security_events = None
+
     log_files, session_files = discover_files(path)
 
     # 1. Logs
@@ -368,6 +351,24 @@ def export_all(path, prefix):
     if not df_outputs.is_empty():
         df_outputs.write_parquet(f"{prefix}tool_outputs.parquet")
         click.echo(f"Saved {prefix}tool_outputs.parquet ({len(df_outputs)} rows)")
+
+    # 4. Security Events (from tool outputs / event files)
+    if collect_security_events:
+        df_events = collect_security_events(root_dir=path)
+        if not df_events.is_empty():
+            df_events.write_parquet(f"{prefix}security_events.parquet")
+            click.echo(f"Saved {prefix}security_events.parquet ({len(df_events)} rows)")
+    else:
+        click.echo("Skipping security events: extract_data module not available.")
+
+    # 5. Chat Logs (redundant with logs, but includes _project_hash metadata)
+    if collect_chat_logs:
+        df_chat_logs = collect_chat_logs(root_dir=path)
+        if not df_chat_logs.is_empty():
+            df_chat_logs.write_parquet(f"{prefix}chat_logs.parquet")
+            click.echo(f"Saved {prefix}chat_logs.parquet ({len(df_chat_logs)} rows)")
+    else:
+        click.echo("Skipping chat logs: extract_data module not available.")
 
 
 if __name__ == "__main__":

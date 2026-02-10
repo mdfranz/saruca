@@ -7,14 +7,36 @@ Mining log and session data from Gemini CLI using Polars for high-performance an
 ## Features
 
 - **Discovery:** Automatically find logs and session JSON files in project directories.
-- **Analysis:** Detailed summaries including message types, project activity, and token usage.
-- **AI Summarization:** Use Gemini models to automatically summarize conversation threads and project outcomes.
-- **Export:** Convert nested session data into flat Parquet files for easy processing in other tools.
-- **Data-centric:** Built on Polars, Orjson, and Pydantic.
+- **Analysis:** Detailed summaries including message types, project activity, token usage, tool calls, and thoughts.
+- **AI Summarization:** Use Gemini models to summarize conversation threads and project outcomes.
+- **Export:** Convert nested session data into flat Parquet tables for easy processing in other tools.
+- **Tool Outputs:** Ingest tool output `.txt` JSON blobs into a unified table.
+- **Data-centric:** Built on Polars, Orjson, Pydantic, and Click.
 
 ## Requirements
 
 - **Python:** 3.13 or higher.
+- **API Key (optional):** `GOOGLE_API_KEY` or `GEMINI_API_KEY` for AI summaries.
+
+## Data Sources
+
+Saruca searches for:
+- `logs.json` files (Gemini CLI logs)
+- `chats/*.json` session files
+- Tool output `.txt` files containing JSON (for `export-all`)
+- Security event exports like `search_security_events_*.txt`, `search_udm_*.txt`, and `*_events.json`
+
+By default it scans the provided `--path` recursively, plus `.gemini-tmp/` if it exists.
+
+## Data Flow
+
+```mermaid
+flowchart LR
+    A[Gemini CLI data on disk\nlogs.json, chats/*.json, tool outputs *.txt] --> B[Saruca list/summarize]
+    A --> C[Saruca export/export-all]
+    C --> D[Parquet files\nmessages, logs, tool_calls, thoughts, tool_outputs]
+    D --> E[External analysis\nPython, BI tools, notebooks]
+```
 
 ## Usage
 
@@ -98,10 +120,11 @@ uv run saruca list --path .
 - `--verbose`: Include full conversation history in the output.
 - `--project <hash>`: Filter results by project hash (prefix matching).
 - `--all`: List all projects, not just the top 5.
+- `--thought`: Show model thoughts (if present).
 
 #### AI Summarization
 
-Generate AI-powered summaries for all sessions within a specific project. This requires a Gemini API key (set via environment variable `GEMINI_API_KEY`).
+Generate AI-powered summaries for all sessions within a specific project. This requires a Gemini API key (set via `GOOGLE_API_KEY` or `GEMINI_API_KEY`).
 
 ```bash
 uv run saruca summarize --path . --project <project_hash>
@@ -109,14 +132,10 @@ uv run saruca summarize --path . --project <project_hash>
 
 #### Export Data
 
-Export sessions and logs to Parquet for external analysis in tools like Excel, PowerBI, or other Python scripts.
+Export everything (messages, logs, tool calls, thoughts, tool outputs, security events, chat logs) to Parquet for external analysis.
 
 ```bash
-# Export sessions to Parquet
-uv run saruca export --path . --output messages.parquet
-
-# Export log entries to Parquet
-uv run saruca export-logs --path . --output logs.parquet
+uv run saruca export --path . --prefix unified_
 ```
 
 ### Utility Scripts
@@ -129,9 +148,6 @@ uv run saruca export-logs --path . --output logs.parquet
 The project includes several tools for data exploration:
 
 - **`analysis_notebook.py`**: An interactive [marimo](https://marimo.io/) notebook for visualizing message types and activity over time.
-- **`explore_data.py`**: A script to quickly preview data summaries, including detailed token usage analysis by model.
-
+- **`explore_data.py`**: A script to quickly preview data summaries, including token usage analysis by model.
 - **`analyze_tools.py`**: A utility specifically for analyzing tool usage and arguments across all sessions.
-
 - **`dig_into_data.py`**: A utility for diving into the actual content of conversations within specific sessions.
-
