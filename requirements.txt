@@ -1,0 +1,7 @@
+polars
+orjson
+pydantic
+click
+marimo
+plotly
+pandas
