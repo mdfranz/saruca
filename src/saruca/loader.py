@@ -72,10 +72,15 @@ def to_polars_messages(sessions: List[Session]) -> pl.DataFrame:
             
             if d.get("thoughts"):
                 # Actual sessions use 'description' instead of 'thought' often
-                d["thoughts_text"] = " ".join([
-                    t.get("description") or t.get("thought") or "" 
-                    for t in d["thoughts"]
-                ])
+                thought_texts = []
+                for t in d["thoughts"]:
+                    txt = t.get("description") or t.get("thought") or ""
+                    if t.get("subject"):
+                        txt = f"[{t.get('subject')}] {txt}"
+                    if txt:
+                        thought_texts.append(txt)
+                
+                d["thoughts_text"] = " ".join(thought_texts)
                 d["thought_count"] = len(d["thoughts"])
             
             if d.get("toolCalls"):

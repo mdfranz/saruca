@@ -157,16 +157,14 @@ def _list_sessions_impl(
 
     # --- Top Projects ---
     if all_projects:
-        click.echo("\n--- All Projects ---")
+        click.echo(click.style("\n--- All Projects (Sorted by Date) ---", bold=True))
     else:
-        click.echo("\n--- Top Projects ---")
+        click.echo(click.style("\n--- Recent Projects ---", bold=True))
 
-    # Calculate counts
-    project_counts = (
-        messages_df["projectHash"].value_counts().sort("count", descending=True)
+    # Calculate stats
+    project_stats = messages_df.group_by("projectHash").agg(
+        [pl.len().alias("count"), pl.col("timestamp").max().alias("last_activity")]
     )
-    if not all_projects:
-        project_counts = project_counts.head(5)
 
     # Extract descriptions (first user message)
     descriptions = (
@@ -176,12 +174,18 @@ def _list_sessions_impl(
         .agg(pl.col("content_raw").first().alias("description"))
     )
 
-    # Join
-    top_projects_df = project_counts.join(descriptions, on="projectHash", how="left")
+    # Join and sort
+    top_projects_df = project_stats.join(
+        descriptions, on="projectHash", how="left"
+    ).sort("last_activity", descending=True)
+
+    if not all_projects:
+        top_projects_df = top_projects_df.head(5)
 
     for row in top_projects_df.iter_rows(named=True):
         p_hash = row["projectHash"]
         count = row["count"]
+        last_act = row["last_activity"]
         desc = row["description"]
 
         # Clean up description
@@ -193,7 +197,8 @@ def _list_sessions_impl(
         else:
             clean_desc = "No user prompts found"
 
-        click.echo(f"  {p_hash[:12]}... : {count:4d} msgs | {clean_desc}")
+        date_str = last_act.strftime("%Y-%m-%d %H:%M") if last_act else "N/A"
+        click.echo(f"  {date_str} | {p_hash[:12]}... : {count:4d} msgs | {clean_desc}")
 
     if verbose or show_thoughts:
         click.echo("\n--- Full Conversation History ---")
@@ -210,9 +215,7 @@ def _list_sessions_impl(
                 role = "USER" if m.type == "user" else "MODEL"
 
                 if verbose:
-                    click.echo(
-                        f"[{m.timestamp.strftime('%Y-%m-%d %H:%M:%S')}] {role}:"
-                    )
+                    click.echo(f"[{m.timestamp.strftime('%Y-%m-%d %H:%M:%S')}] {role}:")
 
                     if isinstance(m.content, str):
                         click.echo(m.content)
