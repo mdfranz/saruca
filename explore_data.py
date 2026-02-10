@@ -2,7 +2,12 @@ import polars as pl
 import orjson
 import glob
 import os
+import sys
 from pathlib import Path
+
+# Add src to path so we can find the saruca package
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import saruca
 
 def load_logs():
@@ -44,4 +49,24 @@ if __name__ == "__main__":
         
         print("\nSessions per project:")
         if "projectHash" in sessions_df.columns:
-            print(sessions_df["projectHash"].value_counts())
+            print(sessions_df["projectHash"].value_counts().head(10))
+
+        # Token Analysis
+        token_cols = [c for c in sessions_df.columns if c.startswith("tokens_")]
+        if token_cols:
+            print("\nToken Usage Summary:")
+            token_summary = sessions_df.select(token_cols).sum()
+            print(token_summary)
+            
+            print("\nAverage Tokens per Gemini Response:")
+            gemini_responses = sessions_df.filter(pl.col("type") == "gemini")
+            if not gemini_responses.is_empty():
+                avg_tokens = gemini_responses.select(token_cols).mean()
+                print(avg_tokens)
+            
+            if "model" in sessions_df.columns:
+                print("\nToken usage by Model:")
+                model_tokens = sessions_df.group_by("model").agg([
+                    pl.col(c).sum().alias(f"sum_{c}") for c in token_cols
+                ])
+                print(model_tokens)

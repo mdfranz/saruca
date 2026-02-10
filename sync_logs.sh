@@ -17,9 +17,16 @@ echo "Syncing logs from $SOURCE_DIR to $DEST_DIR..."
 # -v: verbose
 # -z: compress during transfer
 # --progress: show progress
-# --include='*/' --include='logs.json' --include='chats/*.json' --exclude='*' 
-# (Optional: specific filters if you only want the data files)
 
-rsync -avz --progress "$SOURCE_DIR" "$DEST_DIR"
+rsync -avz --progress \
+    --exclude '.venv' \
+    --exclude '__pycache__' \
+    --exclude '*.pyc' \
+    --exclude 'bin' \
+    --exclude 'include' \
+    --exclude 'lib' \
+    --exclude 'share' \
+    --exclude '__marimo__' \
+    "$SOURCE_DIR" "$DEST_DIR"
 
 echo "Sync complete."

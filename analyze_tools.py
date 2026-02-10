@@ -3,8 +3,10 @@ import saruca
 import os
 import sys
 
+# Add src to path so we can find the saruca package
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 def analyze():
-    sys.path.append(os.getcwd())
     
     _, session_files = saruca.discover_files(".")
     sessions = saruca.load_sessions(session_files)

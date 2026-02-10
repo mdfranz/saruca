@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "saruca"
+version = "0.1.0"
+description = "Saruca: Gemini CLI Log Analyzer"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "polars",
+    "orjson",
+    "pydantic",
+    "click",
+    "marimo",
+    "plotly",
+    "pandas",
+]
+
+[project.scripts]
+saruca = "saruca.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

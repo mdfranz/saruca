@@ -39,5 +39,16 @@ def export(path, output):
     df.write_parquet(output)
     click.echo(f"Exported {len(df)} messages to {output}")
 
+@main.command()
+@click.option("--path", default=".", help="Path to search for logs")
+@click.option("--output", default="logs.parquet", help="Output file")
+def export_logs(path, output):
+    """Export log entries to a parquet file."""
+    log_files, _ = discover_files(path)
+    logs = load_log_entries(log_files)
+    df = to_polars_logs(logs)
+    df.write_parquet(output)
+    click.echo(f"Exported {len(df)} log entries to {output}")
+
 if __name__ == "__main__":
     main()
