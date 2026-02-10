@@ -5,3 +5,4 @@ click
 marimo
 plotly
 pandas
+pydantic-ai-slim[google]

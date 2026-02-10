@@ -1,19 +1,61 @@
 import click
 import polars as pl
 import orjson
+import asyncio
 from saruca import discover_files, load_log_entries, load_sessions, to_polars_logs, to_polars_messages, extract_tool_calls
+from .summarizer import summarize_session
 
 @click.group()
 def main():
     """Saruca: Gemini CLI Log Analyzer"""
     pass
 
-@main.command()
+@main.command(name="summarize")
+@click.option("--path", default=".", help="Path to search for logs")
+@click.option("--project", required=True, help="Filter by project hash")
+def summarize_cmd(path, project):
+    """Use AI to summarize sessions for a specific project."""
+    log_files, session_files = discover_files(path)
+    if not session_files:
+        click.echo("No sessions found.")
+        return
+
+    sessions = [s for s in load_sessions(session_files) if s.projectHash.startswith(project)]
+    if not sessions:
+        click.echo(f"No sessions found for project: {project}")
+        return
+
+    async def run_summaries():
+        for s in sessions:
+            click.echo(click.style(f"\nSummarizing Session: {s.sessionId}", bold=True, fg="cyan"))
+            summary = await summarize_session(s)
+            click.echo(click.style(f"Title: {summary.title}", bold=True))
+            click.echo("Key Points:")
+            for pt in summary.key_points:
+                click.echo(f"  - {pt}")
+            click.echo(f"Outcome: {summary.outcome}")
+            click.echo("-" * 40)
+
+    asyncio.run(run_summaries())
+
+@main.command(name="list")
 @click.option("--path", default=".", help="Path to search for logs")
 @click.option("--verbose", is_flag=True, help="Include full conversation history")
 @click.option("--project", help="Filter by project hash (prefix matches)")
-def summary(path, verbose, project):
-    """Show a detailed summary of logs and sessions."""
+def list_sessions(path, verbose, project):
+    """List sessions and show a detailed summary."""
+    _list_sessions_impl(path, verbose, project)
+
+@main.command(name="summary")
+@click.option("--path", default=".", help="Path to search for logs")
+@click.option("--verbose", is_flag=True, help="Include full conversation history")
+@click.option("--project", help="Filter by project hash (prefix matches)")
+def summary_cmd(path, verbose, project):
+    """Show a detailed summary of sessions (alias for list)."""
+    _list_sessions_impl(path, verbose, project)
+
+def _list_sessions_impl(path, verbose, project):
+    """Internal implementation for listing and summarizing sessions."""
     log_files, session_files = discover_files(path)
     
     click.echo(click.style(f"\nFound {len(log_files)} log files and {len(session_files)} session files.", fg="green"))
