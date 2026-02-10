@@ -20,7 +20,7 @@ def dig():
     # Let's look at a few full conversations
     sessions_ids = df["sessionId"].unique().to_list()
     
-    for sid in sessions_ids[:3]: # Look at first 3 sessions
+    for sid in sessions_ids: # Look at first 3 sessions
         session_msgs = df.filter(pl.col("sessionId") == sid)
         project = session_msgs["projectHash"][0]
         print("\n" + "="*80)
