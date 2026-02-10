@@ -1,8 +1,7 @@
-# saruca
+# Saruca: A Gemini CLI Log & Session Analyzer.
 
 ![saruca logo](saruca.png)
 
-Gemini CLI Log & Session Analyzer.
 
 Mining log and session data from Gemini CLI using Polars for high-performance analysis.
 
@@ -20,30 +19,31 @@ Mining log and session data from Gemini CLI using Polars for high-performance an
 ```bash
 uv venv
 source .venv/bin/activate
-pip install -r requirements.txt
+uv sync
+uv pip install -r requirements.txt
+uv pip install -e .
 ```
 
 ### Usage
-
 
 
 ```bash
 
 # Get a summary of activity in the current directory
 
-python -m saruca.cli summary --path .
+uv run saruca summary --path .
 
 
 
 # Export sessions to Parquet for external analysis
 
-python -m saruca.cli export --path . --output messages.parquet
+uv run saruca export --path . --output messages.parquet
 
 
 
 # Export log entries to Parquet
 
-python -m saruca.cli export-logs --path . --output logs.parquet
+uv run saruca export-logs --path . --output logs.parquet
 
 ```
 
