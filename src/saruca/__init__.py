@@ -4,6 +4,8 @@ from .loader import (
     load_sessions, 
     to_polars_logs, 
     to_polars_messages,
-    extract_tool_calls
+    extract_tool_calls,
+    load_tool_outputs,
+    extract_thoughts
 )
 from .models import Session, LogEntry, Message

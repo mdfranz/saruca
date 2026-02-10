@@ -5,18 +5,27 @@ from datetime import datetime
 class TokenUsage(BaseModel):
     input: Optional[int] = None
     output: Optional[int] = None
+    cached: Optional[int] = None
+    thoughts: Optional[int] = None
+    tool: Optional[int] = None
     cache_creation: Optional[int] = Field(None, alias="cacheCreation")
     cache_read: Optional[int] = Field(None, alias="cacheRead")
+    total: Optional[int] = None
 
 class Thought(BaseModel):
     subject: Optional[str] = None
-    thought: Optional[str] = None
+    description: Optional[str] = None
+    thought: Optional[str] = None  # Keeping for backward compatibility if some logs use it
+    timestamp: Optional[datetime] = None
 
 class ToolCall(BaseModel):
     id: str
     name: Optional[str] = None
     args: Optional[Dict[str, Any]] = None
-    output: Optional[Any] = None
+    result: Optional[List[Dict[str, Any]]] = None
+    status: Optional[str] = None
+    timestamp: Optional[datetime] = None
+    resultDisplay: Optional[Any] = None
 
 class Message(BaseModel):
     id: str
