@@ -1,4 +1,5 @@
 import asyncio
+import xml.dom.minidom
 
 import click
 import orjson
@@ -66,6 +67,39 @@ def summarize_cmd(path, project):
 def list_sessions(path, verbose, project, all_projects, show_thoughts):
     """List sessions and show a detailed summary."""
     _list_sessions_impl(path, verbose, project, all_projects, show_thoughts)
+
+
+def _recursive_parse_json(obj):
+    """Recursively parse strings that look like JSON or XML."""
+    if isinstance(obj, dict):
+        return {k: _recursive_parse_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_recursive_parse_json(i) for i in obj]
+    elif isinstance(obj, str):
+        trimmed = obj.strip()
+        if trimmed.startswith(("{", "[")):
+            try:
+                parsed = orjson.loads(obj)
+                return _recursive_parse_json(parsed)
+            except Exception:
+                return obj
+        # Check for XML-like strings
+        elif trimmed.startswith("<") and trimmed.endswith(">"):
+            try:
+                # Basic check to avoid parsing simple text as XML
+                if "<" in trimmed and ">" in trimmed:
+                    dom = xml.dom.minidom.parseString(obj)
+                    pretty_xml = dom.toprettyxml()
+                    # Remove the xml declaration if it was added and wasn't there (optional, but cleaner)
+                    if pretty_xml.startswith("<?xml"):
+                        pretty_xml = pretty_xml.split("\n", 1)[1]
+                    return f"XML_CONTENT:\n{pretty_xml.strip()}"
+            except Exception:
+                pass
+            return obj
+        return obj
+    else:
+        return obj
 
 
 def _list_sessions_impl(
@@ -237,12 +271,32 @@ def _list_sessions_impl(
                     for tc in m.toolCalls:
                         click.echo(f"\nTOOL CALL: {tc.name}")
                         if tc.args:
+                            cleaned_args = _recursive_parse_json(tc.args)
                             args_json = orjson.dumps(
-                                tc.args, option=orjson.OPT_INDENT_2
+                                cleaned_args, option=orjson.OPT_INDENT_2
                             ).decode()
                             click.echo(f"Args: {args_json}")
                         if tc.result:
                             out_val = tc.result
+
+                            # Try to parse string output as JSON for better display
+                            if isinstance(out_val, str):
+                                trimmed_val = out_val.strip()
+                                if trimmed_val.startswith("<") and trimmed_val.endswith(
+                                    ">"
+                                ):
+                                    click.echo(f"XML Output:\n{out_val}")
+                                    continue
+
+                                try:
+                                    parsed = orjson.loads(out_val)
+                                    out_val = parsed
+                                except Exception:
+                                    pass
+
+                            # Recursively parse any nested JSON in the structure
+                            out_val = _recursive_parse_json(out_val)
+
                             if not isinstance(out_val, str):
                                 out_val = orjson.dumps(
                                     out_val, option=orjson.OPT_INDENT_2
