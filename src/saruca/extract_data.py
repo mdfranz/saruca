@@ -103,7 +103,7 @@ def collect_chat_logs(root_dir: str = "."):
                     for item in data:
                         if isinstance(item, dict):
                             item["source_file"] = f
-                            item["_project_hash"] = project_hash
+                            item["projectHash"] = project_hash
                             all_logs.append(item)
         except Exception:
             pass

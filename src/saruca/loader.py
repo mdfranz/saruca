@@ -6,6 +6,13 @@ from pathlib import Path
 from typing import List, Iterable, Any, Dict
 from .models import Session, LogEntry, Message
 
+
+def _extract_project_hash(path: str) -> str | None:
+    for part in Path(path).parts:
+        if len(part) == 64:
+            return part
+    return None
+
 def discover_files(root_dir: str = "."):
     logs = glob.glob(f"{root_dir}/**/logs.json", recursive=True)
     sessions = glob.glob(f"{root_dir}/**/chats/*.json", recursive=True)
@@ -25,6 +32,8 @@ def load_log_entries(files: Iterable[str]) -> List[LogEntry]:
             data = orjson.loads(f_in.read())
             for item in data:
                 item["source_file"] = f
+                item["projectHash"] = _extract_project_hash(f)
+                item["userMessageIndex"] = item.get("messageId")
                 entries.append(LogEntry(**item))
     return entries
 
@@ -45,11 +54,16 @@ def to_polars_logs(entries: List[LogEntry]) -> pl.DataFrame:
 def to_polars_messages(sessions: List[Session]) -> pl.DataFrame:
     all_msgs = []
     for s in sessions:
-        for m in s.messages:
+        user_index = 0
+        for msg_index, m in enumerate(s.messages):
             d = m.model_dump()
             d["sessionId"] = s.sessionId
             d["projectHash"] = s.projectHash
             d["startTime"] = s.startTime
+            d["messageIndex"] = msg_index
+            if d.get("type") == "user":
+                d["userMessageIndex"] = user_index
+                user_index += 1
             
             content = d.get("content")
             if isinstance(content, dict):
@@ -98,7 +112,13 @@ def to_polars_messages(sessions: List[Session]) -> pl.DataFrame:
 def extract_thoughts(sessions: List[Session]) -> pl.DataFrame:
     thoughts = []
     for s in sessions:
-        for m in s.messages:
+        user_index = 0
+        for msg_index, m in enumerate(s.messages):
+            if m.type == "user":
+                user_index_val = user_index
+                user_index += 1
+            else:
+                user_index_val = None
             if m.thoughts:
                 for t in m.thoughts:
                     d = t.model_dump()
@@ -106,6 +126,8 @@ def extract_thoughts(sessions: List[Session]) -> pl.DataFrame:
                     d["messageId"] = m.id
                     d["messageTimestamp"] = m.timestamp
                     d["projectHash"] = s.projectHash
+                    d["messageIndex"] = msg_index
+                    d["userMessageIndex"] = user_index_val
                     thoughts.append(d)
                     
     if not thoughts:
@@ -116,7 +138,13 @@ def extract_thoughts(sessions: List[Session]) -> pl.DataFrame:
 def extract_tool_calls(sessions: List[Session]) -> pl.DataFrame:
     calls = []
     for s in sessions:
-        for m in s.messages:
+        user_index = 0
+        for msg_index, m in enumerate(s.messages):
+            if m.type == "user":
+                user_index_val = user_index
+                user_index += 1
+            else:
+                user_index_val = None
             if m.toolCalls:
                 for tc in m.toolCalls:
                     d = tc.model_dump()
@@ -124,6 +152,8 @@ def extract_tool_calls(sessions: List[Session]) -> pl.DataFrame:
                     d["messageId"] = m.id
                     d["messageTimestamp"] = m.timestamp
                     d["projectHash"] = s.projectHash
+                    d["messageIndex"] = msg_index
+                    d["userMessageIndex"] = user_index_val
                     
                     # Flatten args
                     if d.get("args"):
@@ -155,7 +185,7 @@ def load_tool_outputs(root_dir: str = ".") -> pl.DataFrame:
 
     """Discovers and loads tool output .txt files that contain JSON."""
 
-    txt_files = glob.glob(f"{root_dir}/**/*.txt", recursive=True)
+    txt_files = glob.glob(f"{root_dir}/**/tool_outputs/*.txt", recursive=True)
 
     
 
@@ -163,7 +193,7 @@ def load_tool_outputs(root_dir: str = ".") -> pl.DataFrame:
 
     if gemini_tmp.exists():
 
-        txt_files.extend(glob.glob(f"{gemini_tmp}/**/*.txt", recursive=True))
+        txt_files.extend(glob.glob(f"{gemini_tmp}/**/tool_outputs/*.txt", recursive=True))
 
 
 
@@ -201,17 +231,7 @@ def load_tool_outputs(root_dir: str = ".") -> pl.DataFrame:
 
                     
 
-                    # Extract project hash from path if possible
-
-                    path_parts = Path(f).parts
-
-                    for part in path_parts:
-
-                        if len(part) == 64: # Likely a hash
-
-                            data["projectHash"] = part
-
-                            break
+                    data["projectHash"] = _extract_project_hash(f)
 
                     all_outputs.append(data)
 

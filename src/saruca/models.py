@@ -21,6 +21,9 @@ class Thought(BaseModel):
 class ToolCall(BaseModel):
     id: str
     name: Optional[str] = None
+    displayName: Optional[str] = None
+    description: Optional[str] = None
+    renderOutputAsMarkdown: Optional[bool] = None
     args: Optional[Dict[str, Any]] = None
     result: Optional[List[Dict[str, Any]]] = None
     status: Optional[str] = None
@@ -47,7 +50,9 @@ class Session(BaseModel):
 class LogEntry(BaseModel):
     sessionId: str
     messageId: int
+    userMessageIndex: Optional[int] = None
     type: str
     message: str
     timestamp: datetime
     source_file: Optional[str] = None
+    projectHash: Optional[str] = None

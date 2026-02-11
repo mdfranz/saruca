@@ -25,6 +25,11 @@ def get_agent():
 
 async def summarize_session(session: Session) -> SessionSummary:
     history = []
+    duration = session.lastUpdated - session.startTime
+    history.append(f"SESSION START: {session.startTime.strftime('%Y-%m-%d %H:%M:%S')}")
+    history.append(f"SESSION END:   {session.lastUpdated.strftime('%Y-%m-%d %H:%M:%S')}\n(DURATION: {duration})")
+    history.append("-" * 20)
+    
     for m in session.messages:
         role = "user" if m.type == "user" else "model"
         content = m.content if isinstance(m.content, str) else str(m.content)

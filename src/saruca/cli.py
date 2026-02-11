@@ -45,6 +45,10 @@ def summarize_cmd(path, project):
     async def run_summaries():
         for s in sessions:
             click.echo(f"\nSummarizing Session: {s.sessionId}")
+            duration = s.lastUpdated - s.startTime
+            click.echo(f"Start Time: {s.startTime.strftime('%Y-%m-%d %H:%M:%S')}")
+            click.echo(f"End Time: {s.lastUpdated.strftime('%Y-%m-%d %H:%M:%S')}\nDuration: {duration}")
+            
             summary = await summarize_session(s)
             click.echo(f"Title: {summary.title}")
             click.echo("Key Points:")
