@@ -1,6 +1,8 @@
-from typing import List, Optional, Any, Dict, Union
-from pydantic import BaseModel, Field
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
+
+from pydantic import BaseModel, Field
+
 
 class TokenUsage(BaseModel):
     input: Optional[int] = None
@@ -12,11 +14,15 @@ class TokenUsage(BaseModel):
     cache_read: Optional[int] = Field(None, alias="cacheRead")
     total: Optional[int] = None
 
+
 class Thought(BaseModel):
     subject: Optional[str] = None
     description: Optional[str] = None
-    thought: Optional[str] = None  # Keeping for backward compatibility if some logs use it
+    thought: Optional[str] = (
+        None  # Keeping for backward compatibility if some logs use it
+    )
     timestamp: Optional[datetime] = None
+
 
 class ToolCall(BaseModel):
     id: str
@@ -30,15 +36,17 @@ class ToolCall(BaseModel):
     timestamp: Optional[datetime] = None
     resultDisplay: Optional[Any] = None
 
+
 class Message(BaseModel):
     id: str
     timestamp: datetime
     type: str
-    content: Union[str, Dict[str, Any]]
+    content: Union[str, Dict[str, Any], List[Any]]
     thoughts: Optional[List[Thought]] = None
     tokens: Optional[TokenUsage] = None
     model: Optional[str] = None
     toolCalls: Optional[List[ToolCall]] = None
+
 
 class Session(BaseModel):
     sessionId: str
@@ -46,6 +54,7 @@ class Session(BaseModel):
     startTime: datetime
     lastUpdated: datetime
     messages: List[Message]
+
 
 class LogEntry(BaseModel):
     sessionId: str
