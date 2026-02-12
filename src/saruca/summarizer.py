@@ -1,10 +1,12 @@
 from typing import List
+import logging
 
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
 from .models import Session
 
+logger = logging.getLogger(__name__)
 
 class SessionSummary(BaseModel):
     title: str
@@ -24,6 +26,7 @@ def get_agent():
 
 
 async def summarize_session(session: Session) -> SessionSummary:
+    logger.info(f"Starting summarization for session {session.sessionId}")
     history = []
     duration = session.lastUpdated - session.startTime
     history.append(f"SESSION START: {session.startTime.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -37,5 +40,12 @@ async def summarize_session(session: Session) -> SessionSummary:
 
     conversation_text = "\n".join(history)
     agent = get_agent()
-    result = await agent.run(conversation_text)
-    return result.output
+    
+    try:
+        result = await agent.run(conversation_text)
+        logger.info(f"Summarization complete for session {session.sessionId}. Title: {result.output.title}")
+        return result.output
+    except Exception as e:
+        logger.error(f"Error summarizing session {session.sessionId}: {e}")
+        # Return a dummy summary or re-raise
+        raise e

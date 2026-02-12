@@ -1,5 +1,6 @@
 import asyncio
 import xml.dom.minidom
+import logging
 
 import click
 import orjson
@@ -15,13 +16,17 @@ from saruca import (
     to_polars_logs,
     to_polars_messages,
 )
+from saruca.log_config import setup_logging
 
 from .summarizer import summarize_session
+
+logger = logging.getLogger(__name__)
 
 
 @click.group()
 def main():
     """Saruca: Gemini CLI Log Analyzer"""
+    setup_logging()
     pass
 
 
@@ -30,8 +35,10 @@ def main():
 @click.option("--project", required=True, help="Filter by project hash")
 def summarize_cmd(path, project):
     """Use AI to summarize sessions for a specific project."""
+    logger.info(f"Command: summarize, Path: {path}, Project: {project}")
     log_files, session_files = discover_files(path)
     if not session_files:
+        logger.warning("No sessions found.")
         click.echo("No sessions found.")
         return
 
@@ -39,23 +46,29 @@ def summarize_cmd(path, project):
         s for s in load_sessions(session_files) if s.projectHash.startswith(project)
     ]
     if not sessions:
+        logger.warning(f"No sessions found for project: {project}")
         click.echo(f"No sessions found for project: {project}")
         return
 
     async def run_summaries():
         for s in sessions:
             click.echo(f"\nSummarizing Session: {s.sessionId}")
+            logger.info(f"Summarizing Session: {s.sessionId}")
             duration = s.lastUpdated - s.startTime
             click.echo(f"Start Time: {s.startTime.strftime('%Y-%m-%d %H:%M:%S')}")
             click.echo(f"End Time: {s.lastUpdated.strftime('%Y-%m-%d %H:%M:%S')}\nDuration: {duration}")
             
-            summary = await summarize_session(s)
-            click.echo(f"Title: {summary.title}")
-            click.echo("Key Points:")
-            for pt in summary.key_points:
-                click.echo(f"  - {pt}")
-            click.echo(f"Outcome: {summary.outcome}")
-            click.echo("-" * 40)
+            try:
+                summary = await summarize_session(s)
+                click.echo(f"Title: {summary.title}")
+                click.echo("Key Points:")
+                for pt in summary.key_points:
+                    click.echo(f"  - {pt}")
+                click.echo(f"Outcome: {summary.outcome}")
+                click.echo("-" * 40)
+            except Exception as e:
+                logger.error(f"Failed to summarize session {s.sessionId}: {e}")
+                click.echo(f"Failed to summarize session: {e}")
 
     asyncio.run(run_summaries())
 
@@ -70,6 +83,7 @@ def summarize_cmd(path, project):
 @click.option("--thought", "show_thoughts", is_flag=True, help="Show model thoughts")
 def list_sessions(path, verbose, project, all_projects, show_thoughts):
     """List sessions and show a detailed summary."""
+    logger.info(f"Command: list, Path: {path}, Verbose: {verbose}, Project: {project}, All: {all_projects}")
     _list_sessions_impl(path, verbose, project, all_projects, show_thoughts)
 
 

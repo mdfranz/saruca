@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 try:
     from saruca.models import Session, Message, TokenUsage, ToolCall
     from saruca import summarizer
+    from saruca.log_config import setup_logging
     HAS_SARUCA = True
 except ImportError as e:
     print(f"Warning: Could not import saruca modules: {e}")
@@ -248,6 +249,9 @@ def analyze_thoughts(thoughts_df):
         print(thoughts_df["subject"].value_counts().sort("count", descending=True).head(10))
 
 async def main():
+    if HAS_SARUCA:
+        setup_logging()
+
     files = {
         "chat_logs": load_parquet_safe("chat_logs.parquet"),
         "logs": load_parquet_safe("logs.parquet"),

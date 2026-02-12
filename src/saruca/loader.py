@@ -1,4 +1,5 @@
 import glob
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
@@ -8,6 +9,7 @@ import polars as pl
 
 from .models import LogEntry, Message, Session
 
+logger = logging.getLogger(__name__)
 
 def _extract_project_hash(path: str) -> str | None:
     for part in Path(path).parts:
@@ -17,6 +19,7 @@ def _extract_project_hash(path: str) -> str | None:
 
 
 def discover_files(root_dir: str = "."):
+    logger.info(f"Discovering files in {root_dir}")
     logs = glob.glob(f"{root_dir}/**/logs.json", recursive=True)
     sessions = glob.glob(f"{root_dir}/**/chats/*.json", recursive=True)
 
@@ -26,19 +29,27 @@ def discover_files(root_dir: str = "."):
         logs.extend(glob.glob(f"{gemini_tmp}/**/logs.json", recursive=True))
         sessions.extend(glob.glob(f"{gemini_tmp}/**/chats/*.json", recursive=True))
 
-    return list(set(logs)), list(set(sessions))
+    unique_logs = list(set(logs))
+    unique_sessions = list(set(sessions))
+    logger.info(f"Found {len(unique_logs)} log files and {len(unique_sessions)} session files.")
+    return unique_logs, unique_sessions
 
 
 def load_log_entries(files: Iterable[str]) -> List[LogEntry]:
     entries = []
     for f in files:
-        with open(f, "rb") as f_in:
-            data = orjson.loads(f_in.read())
-            for item in data:
-                item["source_file"] = f
-                item["projectHash"] = _extract_project_hash(f)
-                item["userMessageIndex"] = item.get("messageId")
-                entries.append(LogEntry(**item))
+        try:
+            with open(f, "rb") as f_in:
+                data = orjson.loads(f_in.read())
+                for item in data:
+                    item["source_file"] = f
+                    item["projectHash"] = _extract_project_hash(f)
+                    item["userMessageIndex"] = item.get("messageId")
+                    entries.append(LogEntry(**item))
+        except Exception as e:
+            logger.warning(f"Failed to load log entries from {f}: {e}")
+    
+    logger.info(f"Loaded {len(entries)} log entries.")
     return entries
 
 
@@ -50,7 +61,9 @@ def load_sessions(files: Iterable[str]) -> List[Session]:
                 data = orjson.loads(f_in.read())
                 sessions.append(Session(**data))
         except Exception as e:
-            print(f"Error loading session {f}: {e}")
+            logger.error(f"Error loading session {f}: {e}")
+    
+    logger.info(f"Loaded {len(sessions)} sessions.")
     return sessions
 
 

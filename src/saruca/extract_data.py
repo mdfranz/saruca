@@ -1,9 +1,12 @@
 import glob
+import logging
 import os
 from pathlib import Path
 
 import orjson
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 
 def collect_security_events(root_dir: str = "."):
@@ -14,6 +17,7 @@ def collect_security_events(root_dir: str = "."):
     - search_udm_*.txt
     - *_events.json
     """
+    logger.info(f"Collecting security events from {root_dir}")
     patterns = [
         "**/search_security_events_*.txt",
         "**/search_udm_*.txt",
@@ -31,7 +35,10 @@ def collect_security_events(root_dir: str = "."):
             all_files.extend(glob.glob(os.path.join(gemini_tmp, p), recursive=True))
 
     events = []
-    for f in set(all_files):
+    unique_files = set(all_files)
+    logger.info(f"Found {len(unique_files)} potential event files.")
+
+    for f in unique_files:
         # Skip directories if glob picked them up
         if not os.path.isfile(f):
             continue
@@ -52,13 +59,16 @@ def collect_security_events(root_dir: str = "."):
                 elif isinstance(data, dict):
                     data["source_file"] = f
                     events.append(data)
-        except Exception:
-            # Not a valid JSON or other error, skip
+        except Exception as e:
+            # Not a valid JSON or other error, skip but maybe log debug
+            logger.debug(f"Skipping file {f}: {e}")
             pass
 
     if not events:
+        logger.info("No security events found.")
         return pl.DataFrame()
 
+    logger.info(f"Collected {len(events)} security events.")
     # Flatten nested dicts/lists for Polars compatibility
     flattened = []
     for e in events:
@@ -75,6 +85,7 @@ def collect_chat_logs(root_dir: str = "."):
     """
     Collects logs from all logs.json files and attempts to associate them with a project hash.
     """
+    logger.info(f"Collecting chat logs from {root_dir}")
     log_files = glob.glob(os.path.join(root_dir, "**/logs.json"), recursive=True)
 
     gemini_tmp = os.path.join(root_dir, ".gemini-tmp")
@@ -84,7 +95,10 @@ def collect_chat_logs(root_dir: str = "."):
         )
 
     all_logs = []
-    for f in set(log_files):
+    unique_files = set(log_files)
+    logger.info(f"Found {len(unique_files)} log files.")
+
+    for f in unique_files:
         if not os.path.isfile(f):
             continue
             
@@ -105,11 +119,15 @@ def collect_chat_logs(root_dir: str = "."):
                             item["source_file"] = f
                             item["projectHash"] = project_hash
                             all_logs.append(item)
-        except Exception:
-            pass
+        except Exception as e:
+             logger.warning(f"Error reading log file {f}: {e}")
+             pass
 
     if not all_logs:
+        logger.info("No chat logs found.")
         return pl.DataFrame()
+    
+    logger.info(f"Collected {len(all_logs)} chat log entries.")
 
     # Flatten nested dicts/lists
     flattened = []
