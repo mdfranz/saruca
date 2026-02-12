@@ -1,6 +1,7 @@
 import asyncio
 import xml.dom.minidom
 import logging
+import sys
 
 import click
 import orjson
@@ -15,6 +16,7 @@ from saruca import (
     load_tool_outputs,
     to_polars_logs,
     to_polars_messages,
+    run_analysis,
 )
 from saruca.log_config import setup_logging
 
@@ -387,6 +389,24 @@ def export_all(path, prefix):
             click.echo(f"Saved {prefix}chat_logs.parquet ({len(df_chat_logs)} rows)")
     else:
         click.echo("Skipping chat logs: extract_data module not available.")
+
+
+@main.command(name="analyze")
+@click.option("--path", default=".", help="Path to search for parquet files")
+@click.option("--prefix", default="", help="Prefix for parquet files")
+def analyze_cmd(path, prefix):
+    """Analyze exported parquet files for insights."""
+    logger.info(f"Command: analyze, Path: {path}, Prefix: {prefix}")
+    try:
+        asyncio.run(run_analysis(path, prefix))
+    except FileNotFoundError as e:
+        logger.error(f"Analysis failed: {e}")
+        click.echo(f"Error: {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"An unexpected error occurred during analysis: {e}")
+        click.echo(f"An unexpected error occurred: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

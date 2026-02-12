@@ -10,6 +10,7 @@ Mining log and session data from Gemini CLI using Polars for high-performance an
 - **Analysis:** Detailed summaries including message types, project activity, token usage, tool calls, and thoughts.
 - **AI Summarization:** Use Gemini models to summarize conversation threads and project outcomes.
 - **Export:** Convert nested session data into flat Parquet tables for easy processing in other tools.
+- **Analysis (Parquet):** Deep dive into exported Parquet data with statistical summaries of sessions, projects, and tool usage.
 - **Tool Outputs:** Ingest tool output `.txt` JSON blobs into a unified table.
 - **Data-centric:** Built on Polars, Orjson, Pydantic, and Click.
 
@@ -33,9 +34,10 @@ By default it scans the provided `--path` recursively, plus `.gemini-tmp/` if it
 ```mermaid
 flowchart LR
     A[Gemini CLI data on disk\nlogs.json, chats/*.json, tool outputs *.txt] --> B[Saruca list/summarize]
-    A --> C[Saruca export/export-all]
-    C --> D[Parquet files\nmessages, logs, tool_calls, thoughts, tool_outputs]
-    D --> E[External analysis\nPython, BI tools, notebooks]
+    A --> C[Saruca export]
+    C --> D[Parquet files\nmessages, logs, tool_calls, thoughts]
+    D --> E[Saruca analyze]
+    D --> F[External analysis\nPython, BI tools, notebooks]
 ```
 
 ## Usage
@@ -137,6 +139,24 @@ Export everything (messages, logs, tool calls, thoughts, tool outputs, security 
 ```bash
 uv run saruca export --path . --prefix unified_
 ```
+
+#### Analyze Exported Data
+
+Analyze the exported Parquet files to get high-level statistics and insights.
+
+```bash
+uv run saruca analyze --path .
+```
+
+**Options:**
+- `--prefix <string>`: If you used a prefix during export, specify it here.
+
+This command provides:
+- General stats (row counts and time ranges for all tables).
+- Session analysis (average messages, tokens, and top longest sessions with AI summaries).
+- Project analysis (session counts and top projects by token usage).
+- Tool usage analysis (top tools and success/error/cancelled breakdown).
+- Thought patterns (top subjects found in model thoughts).
 
 ### Utility Scripts
 

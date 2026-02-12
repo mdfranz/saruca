@@ -8,4 +8,5 @@ from .loader import (
     load_tool_outputs,
     extract_thoughts
 )
+from .analysis import run_analysis
 from .models import Session, LogEntry, Message

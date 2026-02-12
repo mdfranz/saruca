@@ -1,27 +1,18 @@
 import polars as pl
-import sys
-import os
 import asyncio
 import orjson
+import logging
 from datetime import datetime
+from saruca.models import Session, Message, TokenUsage
+from saruca import summarizer
 
-# Add src to path to find saruca
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
-try:
-    from saruca.models import Session, Message, TokenUsage, ToolCall
-    from saruca import summarizer
-    from saruca.log_config import setup_logging
-    HAS_SARUCA = True
-except ImportError as e:
-    print(f"Warning: Could not import saruca modules: {e}")
-    HAS_SARUCA = False
+logger = logging.getLogger(__name__)
 
 def load_parquet_safe(file_path):
     try:
         return pl.read_parquet(file_path)
     except Exception as e:
-        print(f"Error loading {file_path}: {e}")
+        logger.error(f"Error loading {file_path}: {e}")
         return None
 
 def print_header(title):
@@ -31,9 +22,6 @@ def print_header(title):
 
 def reconstruct_session(df, session_id):
     """Reconstructs a Session object from the messages DataFrame for a specific session_id."""
-    if not HAS_SARUCA:
-        return None
-        
     session_rows = df.filter(pl.col("sessionId") == session_id).sort("timestamp")
     if session_rows.is_empty():
         return None
@@ -75,6 +63,9 @@ def reconstruct_session(df, session_id):
         )
         messages.append(msg)
 
+    if not messages:
+        return None
+
     first_ts = messages[0].timestamp
     last_ts = messages[-1].timestamp
     project_hash = rows[0].get("projectHash", "unknown")
@@ -88,20 +79,15 @@ def reconstruct_session(df, session_id):
     )
 
 async def get_session_title(df, session_id):
-    if not HAS_SARUCA:
-        return "N/A (Module missing)"
-    
     session = reconstruct_session(df, session_id)
     if not session:
         return "N/A (Not found)"
     
     try:
-        # We limit the number of messages to summarize to avoid huge context
-        # or we can let the summarizer handle it.
-        # summarizer.summarize_session takes a Session object
         summary = await summarizer.summarize_session(session)
         return summary.title
     except Exception as e:
+        logger.error(f"Error summarizing session {session_id}: {e}")
         return f"Error: {e}"
 
 def analyze_general_stats(files):
@@ -112,13 +98,11 @@ def analyze_general_stats(files):
             if "timestamp" in df.columns:
                 try:
                     if df["timestamp"].dtype == pl.Utf8:
-                        # For chat_logs, timestamp is String
                         ts = df["timestamp"].str.to_datetime(strict=False)
                         min_ts = ts.min()
                         max_ts = ts.max()
                         print(f"  Range: {min_ts} to {max_ts}")
                     else:
-                        # For others, timestamp is Datetime
                         min_ts = df["timestamp"].min()
                         max_ts = df["timestamp"].max()
                         print(f"  Range: {min_ts} to {max_ts}")
@@ -131,7 +115,7 @@ async def analyze_sessions(messages_df):
 
     print_header("Session Analysis")
     
-    # Ensure timestamp is datetime if needed (messages.parquet is already Datetime)
+    # Ensure timestamp is datetime if needed
     if messages_df["timestamp"].dtype == pl.Utf8:
          messages_df = messages_df.with_columns(pl.col("timestamp").str.to_datetime(strict=False))
 
@@ -156,10 +140,8 @@ async def analyze_sessions(messages_df):
         print(f"Total Tokens Consumed: {session_stats['total_tokens'].sum()}")
 
     print("\nTop 5 Longest Sessions (by message count) with AI Summaries:")
-    # Sorting by message_count descending
     top_sessions = session_stats.sort("message_count", descending=True).head(5)
     
-    # Print table header
     print(f"{'Session ID':<36} | {'Msgs':<5} | {'Duration':<15} | {'Project':<10} | {'Title'}")
     print("-" * 120)
 
@@ -169,7 +151,6 @@ async def analyze_sessions(messages_df):
         dur = str(row['duration'])
         proj = row.get('projectHash', 'N/A')[:8] + ".." if row.get('projectHash') else "N/A"
         
-        # Generate summary title
         title = await get_session_title(messages_df, sid)
         
         print(f"{sid:<36} | {msgs:<5} | {dur:<15} | {proj:<10} | {title}")
@@ -210,9 +191,7 @@ async def analyze_projects(messages_df):
         sess_count = row['session_count']
         msg_count = row['message_count']
         
-        # Find the latest session for this project to summarize
         proj_messages = messages_df.filter(pl.col("projectHash") == phash)
-        # We need to find the session with the max timestamp
         latest_session_id = proj_messages.sort("timestamp", descending=True).select("sessionId").head(1).item()
         
         title = await get_session_title(messages_df, latest_session_id)
@@ -248,23 +227,32 @@ def analyze_thoughts(thoughts_df):
         print("Top 10 Thought Subjects:")
         print(thoughts_df["subject"].value_counts().sort("count", descending=True).head(10))
 
-async def main():
-    if HAS_SARUCA:
-        setup_logging()
-
-    files = {
-        "chat_logs": load_parquet_safe("chat_logs.parquet"),
-        "logs": load_parquet_safe("logs.parquet"),
-        "messages": load_parquet_safe("messages.parquet"),
-        "thoughts": load_parquet_safe("thoughts.parquet"),
-        "tool_calls": load_parquet_safe("tool_calls.parquet"),
+async def run_analysis(path=".", prefix=""):
+    import os
+    
+    file_map = {
+        "chat_logs": f"{prefix}chat_logs.parquet",
+        "logs": f"{prefix}logs.parquet",
+        "messages": f"{prefix}messages.parquet",
+        "thoughts": f"{prefix}thoughts.parquet",
+        "tool_calls": f"{prefix}tool_calls.parquet",
     }
+    
+    files = {}
+    any_found = False
+    for name, filename in file_map.items():
+        file_path = os.path.join(path, filename)
+        if os.path.exists(file_path):
+            files[name] = load_parquet_safe(file_path)
+            any_found = True
+        else:
+            files[name] = None
+            
+    if not any_found:
+        raise FileNotFoundError(f"No parquet files found in {path} with prefix '{prefix}'")
 
     analyze_general_stats(files)
     await analyze_sessions(files["messages"])
     await analyze_projects(files["messages"])
     analyze_tools(files["tool_calls"])
     analyze_thoughts(files["thoughts"])
-
-if __name__ == "__main__":
-    asyncio.run(main())
