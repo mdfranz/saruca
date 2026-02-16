@@ -15,6 +15,18 @@ def load_parquet_safe(file_path):
         logger.error(f"Error loading {file_path}: {e}")
         return None
 
+def _filter_df_by_project(df: pl.DataFrame | None, project: str | None) -> pl.DataFrame | None:
+    if df is None or project is None:
+        return df
+    if "projectHash" not in df.columns:
+        return df
+    return df.filter(
+        pl.col("projectHash")
+        .cast(pl.Utf8)
+        .fill_null("")
+        .str.starts_with(project)
+    )
+
 def print_header(title):
     print(f"\n{'='*len(title)}")
     print(title)
@@ -112,6 +124,10 @@ def analyze_general_stats(files):
 async def analyze_sessions(messages_df):
     if messages_df is None: 
         return
+    if messages_df.is_empty():
+        print_header("Session Analysis")
+        print("No messages to analyze.")
+        return
 
     print_header("Session Analysis")
     
@@ -158,6 +174,10 @@ async def analyze_sessions(messages_df):
 
 async def analyze_projects(messages_df):
     if messages_df is None:
+        return
+    if messages_df.is_empty():
+        print_header("Project Analysis")
+        print("No messages to analyze.")
         return
 
     print_header("Project Analysis")
@@ -207,6 +227,10 @@ async def analyze_projects(messages_df):
 def analyze_tools(tool_calls_df):
     if tool_calls_df is None:
         return
+    if tool_calls_df.is_empty():
+        print_header("Tool Usage Analysis")
+        print("No tool calls to analyze.")
+        return
 
     print_header("Tool Usage Analysis")
     
@@ -220,6 +244,10 @@ def analyze_tools(tool_calls_df):
 def analyze_thoughts(thoughts_df):
     if thoughts_df is None:
         return
+    if thoughts_df.is_empty():
+        print_header("Thought Patterns")
+        print("No thoughts to analyze.")
+        return
 
     print_header("Thought Patterns")
     
@@ -227,7 +255,7 @@ def analyze_thoughts(thoughts_df):
         print("Top 10 Thought Subjects:")
         print(thoughts_df["subject"].value_counts().sort("count", descending=True).head(10))
 
-async def run_analysis(path=".", prefix=""):
+async def run_analysis(path=".", prefix="", project: str | None = None):
     import os
     
     file_map = {
@@ -250,6 +278,14 @@ async def run_analysis(path=".", prefix=""):
             
     if not any_found:
         raise FileNotFoundError(f"No parquet files found in {path} with prefix '{prefix}'")
+
+    if project is not None:
+        for name, df in list(files.items()):
+            files[name] = _filter_df_by_project(df, project)
+
+        messages_df = files.get("messages")
+        if messages_df is None or messages_df.is_empty():
+            raise ValueError(f"No data found for project '{project}' in {path} with prefix '{prefix}'")
 
     analyze_general_stats(files)
     await analyze_sessions(files["messages"])

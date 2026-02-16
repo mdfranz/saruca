@@ -394,12 +394,17 @@ def export_all(path, prefix):
 @main.command(name="analyze")
 @click.option("--path", default=".", help="Path to search for parquet files")
 @click.option("--prefix", default="", help="Prefix for parquet files")
-def analyze_cmd(path, prefix):
+@click.option("--project", default=None, help="Filter by project hash (prefix matches)")
+def analyze_cmd(path, prefix, project):
     """Analyze exported parquet files for insights."""
-    logger.info(f"Command: analyze, Path: {path}, Prefix: {prefix}")
+    logger.info(f"Command: analyze, Path: {path}, Prefix: {prefix}, Project: {project}")
     try:
-        asyncio.run(run_analysis(path, prefix))
+        asyncio.run(run_analysis(path, prefix, project=project))
     except FileNotFoundError as e:
+        logger.error(f"Analysis failed: {e}")
+        click.echo(f"Error: {e}")
+        sys.exit(1)
+    except ValueError as e:
         logger.error(f"Analysis failed: {e}")
         click.echo(f"Error: {e}")
         sys.exit(1)
