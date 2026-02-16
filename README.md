@@ -24,7 +24,7 @@ Mining log and session data from Gemini CLI using Polars for high-performance an
 Saruca searches for:
 - `logs.json` files (Gemini CLI logs)
 - `chats/*.json` session files
-- Tool output `.txt` files containing JSON (for `export-all`)
+- Tool output `.txt` files containing JSON (for `export`)
 - Security event exports like `search_security_events_*.txt`, `search_udm_*.txt`, and `*_events.json`
 
 By default it scans the provided `--path` recursively, plus `.gemini-tmp/` if it exists.
@@ -150,6 +150,7 @@ uv run saruca analyze --path .
 
 **Options:**
 - `--prefix <string>`: If you used a prefix during export, specify it here.
+- `--project <string>`: Filter analysis by project hash (prefix matching).
 
 This command provides:
 - General stats (row counts and time ranges for all tables).
@@ -161,7 +162,6 @@ This command provides:
 ### Utility Scripts
 
 - **`./sync_logs.sh`**: Syncs logs from the default Gemini CLI temporary directory (`~/.gemini/tmp/`) to the local `.gemini-tmp/` directory, excluding unnecessary files.
-- **`./export_unified.sh`**: Automatically exports all discovered sessions and logs from `.gemini-tmp/` into unified `sessions_unified.parquet` and `logs_unified.parquet` files.
 
 ## Exploration
 
@@ -169,5 +169,4 @@ The project includes several tools for data exploration:
 
 - **`analysis_notebook.py`**: An interactive [marimo](https://marimo.io/) notebook for visualizing message types and activity over time.
 - **`explore_data.py`**: A script to quickly preview data summaries, including token usage analysis by model.
-- **`analyze_tools.py`**: A utility specifically for analyzing tool usage and arguments across all sessions.
 - **`dig_into_data.py`**: A utility for diving into the actual content of conversations within specific sessions.
