@@ -34,22 +34,33 @@ def main():
 
 @main.command(name="summarize")
 @click.option("--path", default=".", help="Path to search for logs")
-@click.option("--project", required=True, help="Filter by project hash")
-def summarize_cmd(path, project):
-    """Use AI to summarize sessions for a specific project."""
-    logger.info(f"Command: summarize, Path: {path}, Project: {project}")
+@click.option("--project", help="Filter by project hash")
+@click.option("--session", help="Filter by session ID")
+def summarize_cmd(path, project, session):
+    """Use AI to summarize sessions for a specific project or session."""
+    logger.info(f"Command: summarize, Path: {path}, Project: {project}, Session: {session}")
     log_files, session_files = discover_files(path)
     if not session_files:
         logger.warning("No sessions found.")
         click.echo("No sessions found.")
         return
 
-    sessions = [
-        s for s in load_sessions(session_files) if s.projectHash.startswith(project)
-    ]
-    if not sessions:
-        logger.warning(f"No sessions found for project: {project}")
-        click.echo(f"No sessions found for project: {project}")
+    sessions = load_sessions(session_files)
+
+    if project:
+        sessions = [s for s in sessions if s.projectHash.startswith(project)]
+        if not sessions:
+            click.echo(f"No sessions found for project: {project}")
+            return
+
+    if session:
+        sessions = [s for s in sessions if s.sessionId == session]
+        if not sessions:
+            click.echo(f"No session found with ID: {session}")
+            return
+
+    if not project and not session:
+        click.echo("Please specify --project or --session to summarize.")
         return
 
     async def run_summaries():
@@ -79,14 +90,17 @@ def summarize_cmd(path, project):
 @click.option("--path", default=".", help="Path to search for logs")
 @click.option("--verbose", is_flag=True, help="Include full conversation history")
 @click.option("--project", help="Filter by project hash (prefix matches)")
+@click.option("--session", help="Filter by session ID")
 @click.option(
     "--all", "all_projects", is_flag=True, help="List all projects, not just top 5"
 )
 @click.option("--thought", "show_thoughts", is_flag=True, help="Show model thoughts")
-def list_sessions(path, verbose, project, all_projects, show_thoughts):
+def list_sessions(path, verbose, project, session, all_projects, show_thoughts):
     """List sessions and show a detailed summary."""
-    logger.info(f"Command: list, Path: {path}, Verbose: {verbose}, Project: {project}, All: {all_projects}")
-    _list_sessions_impl(path, verbose, project, all_projects, show_thoughts)
+    logger.info(
+        f"Command: list, Path: {path}, Verbose: {verbose}, Project: {project}, Session: {session}, All: {all_projects}"
+    )
+    _list_sessions_impl(path, verbose, project, session, all_projects, show_thoughts)
 
 
 def _recursive_parse_json(obj):
@@ -123,7 +137,7 @@ def _recursive_parse_json(obj):
 
 
 def _list_sessions_impl(
-    path, verbose, project, all_projects=False, show_thoughts=False
+    path, verbose, project, session, all_projects=False, show_thoughts=False
 ):
     """Internal implementation for listing and summarizing sessions."""
     log_files, session_files = discover_files(path)
@@ -142,6 +156,12 @@ def _list_sessions_impl(
         sessions = [s for s in sessions if s.projectHash.startswith(project)]
         if not sessions:
             click.echo(f"No sessions found for project: {project}")
+            return
+
+    if session:
+        sessions = [s for s in sessions if s.sessionId == session]
+        if not sessions:
+            click.echo(f"No session found with ID: {session}")
             return
 
     # Sort sessions by start time

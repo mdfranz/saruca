@@ -36,7 +36,7 @@ def discover_files(root_dir: str = "."):
 
 
 def load_log_entries(files: Iterable[str]) -> List[LogEntry]:
-    entries = []
+    entries_dict: Dict[tuple, LogEntry] = {}
     for f in files:
         try:
             with open(f, "rb") as f_in:
@@ -45,24 +45,34 @@ def load_log_entries(files: Iterable[str]) -> List[LogEntry]:
                     item["source_file"] = f
                     item["projectHash"] = _extract_project_hash(f)
                     item["userMessageIndex"] = item.get("messageId")
-                    entries.append(LogEntry(**item))
+                    entry = LogEntry(**item)
+                    key = (entry.sessionId, entry.messageId, entry.timestamp)
+                    if key not in entries_dict:
+                        entries_dict[key] = entry
         except Exception as e:
             logger.warning(f"Failed to load log entries from {f}: {e}")
-    
+
+    entries = list(entries_dict.values())
     logger.info(f"Loaded {len(entries)} log entries.")
     return entries
 
 
 def load_sessions(files: Iterable[str]) -> List[Session]:
-    sessions = []
+    sessions_dict: Dict[str, Session] = {}
     for f in files:
         try:
             with open(f, "rb") as f_in:
                 data = orjson.loads(f_in.read())
-                sessions.append(Session(**data))
+                s = Session(**data)
+                if (
+                    s.sessionId not in sessions_dict
+                    or s.lastUpdated > sessions_dict[s.sessionId].lastUpdated
+                ):
+                    sessions_dict[s.sessionId] = s
         except Exception as e:
             logger.error(f"Error loading session {f}: {e}")
-    
+
+    sessions = list(sessions_dict.values())
     logger.info(f"Loaded {len(sessions)} sessions.")
     return sessions
 
